@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>이모티콘 32분할기</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f5f5f7;color:#171717;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+  .wrap{width:min(760px,100%);margin:auto;padding:24px 16px 40px}
+  .card{background:#fff;border-radius:24px;padding:24px;box-shadow:0 8px 30px #0000000c}
+  h1{margin:0 0 8px;font-size:28px}
+  .sub{margin:0 0 22px;color:#666;line-height:1.55}
+  .drop{display:block;border:2px dashed #c8c8cc;border-radius:18px;padding:28px 16px;text-align:center;cursor:pointer;background:#fafafa}
+  .drop strong{display:block;font-size:17px;margin-bottom:6px}
+  .drop span{font-size:13px;color:#777}
+  input{display:none}
+  .info{margin-top:14px;padding:12px 14px;border-radius:12px;background:#f7f7f8;font-size:14px;color:#555}
+  .buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  button{border:0;border-radius:14px;padding:15px;font-size:16px;font-weight:700;cursor:pointer}
+  #make{background:#111;color:#fff}
+  #make:disabled{background:#ccc;cursor:not-allowed}
+  #reset{background:#eee;color:#333}
+  #reset:disabled{opacity:.45;cursor:not-allowed}
+  .status{min-height:24px;margin:16px 2px 0;font-size:14px;color:#555}
+  .error{color:#c62828;font-weight:700}
+  .ok{color:#16803c;font-weight:700}
+  .previewBox{margin-top:22px}
+  .previewBox h2{font-size:17px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+  .tile{position:relative;aspect-ratio:1;background:#eee;border-radius:5px;overflow:hidden}
+  .tile img{display:block;width:100%;height:100%;object-fit:cover}
+  .num{position:absolute;left:4px;top:4px;background:#111d;color:#fff;border-radius:6px;padding:2px 5px;font-size:10px;font-weight:700}
+  .skip{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#fff9;color:#888;font-size:11px;font-weight:700}
+  .note{margin-top:16px;font-size:12px;color:#777;line-height:1.6}
+  @media(max-width:420px){.card{padding:18px;border-radius:20px}h1{font-size:24px}.grid{gap:3px}.num{font-size:9px;left:2px;top:2px;padding:1px 3px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="card">
+    <h1>🐵 이모티콘 32분할기</h1>
+    <p class="sub">2160×2160px 원본을 6×6으로 정확히 나눕니다.<br>
+      <b>01~32번만 PNG로 저장</b>하고 33~36번은 자동으로 제외합니다.</p>
+
+    <label class="drop" for="file">
+      <strong>📁 이미지 선택 / 여기에 놓기</strong>
+      <span>2160 × 2160px PNG, JPG, JPEG</span>
+    </label>
+    <input id="file" type="file" accept="image/png,image/jpeg,image/jpg">
+
+    <div id="info" class="info">아직 이미지를 선택하지 않았어요.</div>
+
+    <div class="buttons">
+      <button id="make" disabled>32개 PNG ZIP 만들기</button>
+      <button id="reset" disabled>초기화</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <section class="previewBox">
+      <h2>미리보기 · 6 × 6</h2>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <p class="note">
+      ※ 원본 이미지를 재생성하지 않고 브라우저에서 픽셀 영역을 그대로 crop합니다.
+      업로드한 이미지는 서버로 전송되지 않습니다. 33~36번은 미리보기에는 표시되지만 ZIP에는 들어가지 않습니다.
+    </p>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const fileInput=document.getElementById('file');
+const info=document.getElementById('info');
+const make=document.getElementById('make');
+const reset=document.getElementById('reset');
+const status=document.getElementById('status');
+const grid=document.getElementById('grid');
+let image=null;
+
+function setStatus(text, cls=''){status.className='status '+cls;status.textContent=text;}
+
+function buildPreview(img){
+  grid.innerHTML='';
+  for(let n=1;n<=36;n++){
+    const row=Math.floor((n-1)/6), col=(n-1)%6;
+    const c=document.createElement('canvas');
+    c.width=360;c.height=360;
+    c.getContext('2d').drawImage(img,col*360,row*360,360,360,0,0,360,360);
+    const box=document.createElement('div');box.className='tile';
+    const im=document.createElement('img');im.src=c.toDataURL('image/png');
+    const label=document.createElement('div');label.className='num';label.textContent=String(n).padStart(2,'0');
+    box.append(im,label);
+    if(n>32){const s=document.createElement('div');s.className='skip';s.textContent='저장 안 함';box.append(s)}
+    grid.append(box);
+  }
+}
+
+fileInput.addEventListener('change',()=>{
+  const file=fileInput.files[0];
+  if(!file)return;
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    if(img.width!==2160||img.height!==2160){
+      image=null;make.disabled=true;reset.disabled=false;
+      info.textContent=`현재 이미지: ${img.width} × ${img.height}px`;
+      setStatus('❌ 정확히 2160 × 2160px 이미지를 업로드해주세요.','error');
+      URL.revokeObjectURL(url);return;
+    }
+    image=img;make.disabled=false;reset.disabled=false;
+    info.textContent=`✓ 2160 × 2160px 확인 · ${file.name}`;
+    setStatus('✓ 준비 완료 · 01~32번을 ZIP으로 저장합니다.','ok');
+    buildPreview(img);
+  };
+  img.onerror=()=>{setStatus('❌ 이미지를 읽을 수 없습니다.','error');URL.revokeObjectURL(url)};
+  img.src=url;
+});
+
+make.addEventListener('click',async()=>{
+  if(!image)return;
+  make.disabled=true;
+  setStatus('⏳ 01/32부터 PNG를 만드는 중...');
+  const zip=new JSZip();
+  try{
+    for(let n=1;n<=32;n++){
+      const row=Math.floor((n-1)/6),col=(n-1)%6;
+      const c=document.createElement('canvas');c.width=360;c.height=360;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(image,col*360,row*360,360,360,0,0,360,360);
+      const blob=await new Promise((resolve,reject)=>{
+        c.toBlob(b=>b?resolve(b):reject(new Error('PNG 변환 실패')),'image/png');
+      });
+      zip.file(`${String(n).padStart(2,'0')}.png`,blob);
+      setStatus(`⏳ ${n}/32 PNG 생성 완료...`);
+      await new Promise(r=>setTimeout(r,0));
+    }
+    setStatus('📦 ZIP 압축 중...');
+    const out=await zip.generateAsync({type:'blob',compression:'STORE'},meta=> {
+      if(meta.percent!==undefined)setStatus(`📦 ZIP 압축 중... ${Math.round(meta.percent)}%`);
+    });
+    const a=document.createElement('a');
+    const u=URL.createObjectURL(out);
+    a.href=u;a.download='emoticon_360x360_01-32.zip';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),1000);
+    setStatus('✅ 완료! 360×360 PNG 32개가 ZIP으로 저장되었습니다.','ok');
+  }catch(e){
+    console.error(e);
+    setStatus('❌ 처리 중 오류가 발생했습니다.','error');
+  }finally{make.disabled=false}
+});
+
+reset.addEventListener('click',()=>{
+  fileInput.value='';image=null;grid.innerHTML='';
+  info.textContent='아직 이미지를 선택하지 않았어요.';
+  setStatus('');
+  make.disabled=true;reset.disabled=true;
+});
+</script>
+
+</body>
+</html>
